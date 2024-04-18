@@ -1,0 +1,1454 @@
+﻿@model DAL.SaleOrderSearchClass
+@{
+    ViewBag.Title = "Order_Status";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var userID = ViewBag.UserID;
+}
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link href="~/Content/Login_css/Order_status_CSS.css" rel="stylesheet" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+<link href="~/Content/Datatable_css_Js/jquery.dataTables.min.css" rel="stylesheet" />
+<script src="~/jquery-3.7.1.js"></script>
+<script src="~/Content/Datatable_css_Js/jquery.dataTables.min.js"></script>
+<link href="~/Content/Datatable_css_Js/jquery-ui.css" rel="stylesheet" />
+<script src="~/Content/Datatable_css_Js/jquery-ui.js"></script>
+<script src="~/Content/Datatable_css_Js/jquery-ui.min.js"></script>
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+
+<script type="text/javascript">
+    $(document).ready(function () {
+        $(document).on("change", "#myTable input[type='checkbox']", function () {
+            var row = $(this).closest('tr');
+            var rowCells = row.find('td');
+            $("#myTable input[type='checkbox']").not($(this)).prop('checked', false);
+            if ($(this).prop('checked') && rowCells) {
+                var workOrderNo = rowCells.eq(1).text().trim();
+                var gencode = rowCells.eq(6).text().trim();
+                sessionStorage.setItem('workOrderNo', workOrderNo);
+                sessionStorage.setItem('gencode', gencode); 
+                getImagePreviews();
+                Designer();
+                RowMaterial();
+                PackingMaterial();
+                Production();
+                Packing();
+                Testing();
+                Invoice();
+                Payment();
+            }
+        });
+
+        $("#findGroupOrder, #findWorkOrder, #findBatchNo, #combiCode, #ddl_SectionName, #ddl_ItemName, #datewisesearch1, #datewisesearch2").on("keypress", function (event) {
+            if (event.which === 13) {
+                event.preventDefault();
+                $("#submitButton").click();
+            }
+        });
+
+        $("#submitButton").on("click", function () {
+            var groupOrder = $("#findGroupOrder").val();
+            var workOrder = $("#findWorkOrder").val();
+            var Batch = $("#findBatchNo").val();
+            var combiCode = $("#combiCode").val();
+            var Dsgform = $("#ddl_SectionName").find('option:selected').text();
+            var CoreGen = $("#ddl_ItemName").find('option:selected').text();
+            if (CoreGen === "Select Item") {
+                CoreGen = "";
+            }
+            var fromdate = $("#datewisesearch1").val();
+            var todate = $("#datewisesearch2").val();
+
+            if (groupOrder || workOrder || Batch || combiCode || Dsgform || CoreGen || (fromdate && todate)) {
+                if (groupOrder) {
+                    GroupSearch(groupOrder);
+                } else if (workOrder) {
+                    WorkSearch(workOrder);
+                } else if (Batch) {
+                    BatchSearch(Batch);
+                } else if (combiCode) {
+                    CombiSearch(combiCode);
+                } else if (Dsgform && CoreGen && fromdate && todate) {
+                    SectionItemDateWise(Dsgform, CoreGen, fromdate, todate);
+                } else if (Dsgform && CoreGen && (!fromdate)) {
+
+                    SectionItemWise(Dsgform, CoreGen);
+                } else if (Dsgform && (!CoreGen) && (!fromdate)) {
+
+                    SectionPartyWise(Dsgform);
+
+                } else if (fromdate && todate) {
+
+                    DateWise(fromdate, todate);
+
+                }
+            }
+        });
+
+        $('#datewisesearch1').datepicker({
+            changeMonth: true,
+            changeYear: true,
+            showButtonPanel: false,
+            maxDate: 0,
+            yearRange: 'c-100:c+10',
+            onSelect: function (selectedDate) {
+                $('#datewisesearch2').datepicker('option', 'minDate', selectedDate);
+            }
+        });
+        $('#datewisesearch2').datepicker({
+            changeMonth: true,
+            changeYear: true,
+            showButtonPanel: false,
+            minDate: 0,
+            yearRange: 'c-100:c+10',
+        });
+        $('#datewisesearch1').prop('readonly', true);
+        $('#datewisesearch2').prop('readonly', true);
+        $("#ddl_SectionName").change(function () {
+            var selectedValue = $(this).val();
+            var itemsDropdown = $("#ddl_ItemName");
+            $.ajax({
+                url: '/OrderStatus/GetItemList',
+                type: 'POST',
+                data: JSON.stringify({ Section: selectedValue }),
+                contentType: 'application/json',
+                success: function (response) {
+                    itemsDropdown.empty().append($('<option>', { value: '', text: 'Select Item' }));
+
+                    $.each(response, function (index, item) {
+                        itemsDropdown.append($('<option>', { value: item.gen_code, text: item.cor_gen_name }));
+                    });
+                },
+                error: function () {
+                    alert("Error occurred while fetching items.");
+                }
+            });
+        });
+        clearAllInputs();
+        displayPartyName();
+        SectionsList();
+    });
+
+    function clearAllInputs() {
+        $('#findGroupOrder').val('');
+        $('input[type="text"]').val('');
+        $('input[type="date"]').val('');
+        $('textarea').val('');
+        $('#ddl_SectionName').val('');
+        $('#ddl_ItemName').val('');
+        var canvas = document.getElementById('imagePreview');
+        var ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        $('input[type="checkbox"]').prop('checked', false);
+        $('#myTable').DataTable().rows().remove().draw();
+        $('#desi').DataTable().rows().remove().draw();
+        $('#RowMaterialStatus').DataTable().rows().remove().draw();
+        $('#PackingMaterialStatus').DataTable().rows().remove().draw();
+        $('#producSt').DataTable().rows().remove().draw();
+        $('#PackingStatus').DataTable().rows().remove().draw();
+        $('#testing').DataTable().rows().remove().draw();
+        $('#InvoiceStatusId').DataTable().rows().remove().draw();
+        $('#PaymentStatusID').DataTable().rows().remove().draw();
+    }
+
+    function displayPartyName() {
+        try {
+            var Username = "SampleUser";
+            var PasswordHash = "SamplePasswordHash";
+            var base64Credentials = btoa(Username + ":" + PasswordHash);
+            $.ajax({
+                url: '/OrderStatus/DisplayPartyName',
+                type: 'POST',
+                dataType: "Json",
+                contentType: 'application/json',
+                success: function (response) {                   
+                    var firstObject = response[0];
+                    var partyName = firstObject.PartyName;
+                    $('#ddl_PartyName').text(partyName);
+                },
+                error: function (error) {
+                    console.error('Error fetching party name:', error);
+                }
+            });
+        } catch (e) {
+            console.error('An error occurred:', e);
+        }
+    }
+
+    function SectionsList() {
+        $.ajax({
+            url: '/Enquiry_Quotation/GetDoseForm',
+            type: 'POST',
+            contentType: 'application/json',
+            success: function (response) {
+                var ddl_SectionName = $('#ddl_SectionName');
+                ddl_SectionName.empty().append($('<option>', { value: '', text: 'Select' }));
+                $.each(response, function (index, item) {
+                    ddl_SectionName.append($('<option>', {
+                        value: item.dsg_code,
+                        text: item.dsg_form
+                    }));
+                });
+            },
+            error: function (xhr, textStatus, errorThrown) {
+                if (errorThrown === 'net::ERR_CERT_AUTHORITY_INVALID') {
+                    console.log('SSL certificate authority invalid.');
+                } else {
+                    console.log('Other error: ' + errorThrown);
+                }
+            }
+        });
+    }
+
+    function GroupSearch(groupOrder) {
+        $("#divLoader").show();
+        if (groupOrder.length > 0) {
+            $.ajax({
+                url: '/OrderStatus/GetByGO',
+                type: "POST",
+                data: JSON.stringify({ GroupOrder: groupOrder }),
+                dataType: "Json",
+                contentType: 'application/json',
+                success: function (response) {
+                    $('#myTable').DataTable().clear().destroy();
+
+                    initializeDataTable(response);
+                    $("#divLoader").hide();
+                }
+            });
+        }
+    }
+
+    function WorkSearch(workOrder) {
+        $("#divLoader").show();
+        if (workOrder.length > 0) {
+            $.ajax({
+                url: '/OrderStatus/GetByWO',
+                type: 'POST',
+                data: JSON.stringify({ WorkOrder: workOrder }),
+                dataType: "Json",
+                contentType: 'application/json',
+                success: function (response) {
+                    $('#myTable').DataTable().clear().destroy();
+                    initializeDataTable(response);
+                    $("#divLoader").hide();
+                }
+            });
+        }
+    }
+
+    function BatchSearch(Batch) {
+        $("#divLoader").show();
+        if (Batch.length > 0) {
+            $.ajax({
+                url: '/OrderStatus/GetByBatch',
+                type: 'POST',
+                data: JSON.stringify({ batch: Batch }),
+                contentType: 'application/json',
+                success: function (response) {
+                    $('#myTable').DataTable().clear().destroy();
+                    initializeDataTable(response);
+                    $("#divLoader").hide();
+                }
+            });
+        }
+    }
+
+    function CombiSearch(combiCode) {
+        $("#divLoader").show();
+        if (combiCode.length > 0) {
+            $.ajax({
+                url: '/OrderStatus/GetByCombi',
+                type: 'POST',
+                data: JSON.stringify({ combi: combiCode }),
+                contentType: 'application/json',
+                success: function (response) {
+                    $('#myTable').DataTable().clear().destroy();
+                    initializeDataTable(response);
+                    $("#divLoader").hide();
+                }
+            });
+        }
+    }
+
+    function SectionPartyWise(Dsgform) {
+        $("#Dsgform").show();
+        //if (Dsgform.length > 0) {
+        $.ajax({
+            url: '/OrderStatus/GetBySectionParty',
+            type: 'POST',
+            data: JSON.stringify({ dsgform: Dsgform }),
+            contentType: 'application/json',
+            success: function (response) {
+                $('#myTable').DataTable().clear().destroy();
+                initializeDataTable(response);
+                $("#divLoader").hide();
+            }
+        });
+        //}
+    }
+
+    function SectionItemWise(Dsgform, CoreGen) {
+        $("#divLoader").show();
+        if (Dsgform.length > 0 & CoreGen.length > 0) {
+            $.ajax({
+                url: '/OrderStatus/GetBySectionItemParty',
+                type: 'POST',
+                data: JSON.stringify({
+                    corrgrn: CoreGen,
+                    dsgform: Dsgform
+                }),
+                contentType: 'application/json',
+                success: function (response) {
+                    $('#myTable').DataTable().clear().destroy();
+
+                    initializeDataTable(response);
+                    $("#divLoader").hide();
+                }
+            });
+        }
+    }
+
+    function DateWise(fromdate, todate) {
+        $("#divLoader").show();
+        $.ajax({
+            url: '/OrderStatus/GetByDateWiseSearch',
+            type: 'POST',
+            data: JSON.stringify({
+                FromDate: fromdate,
+                ToDate: todate
+            }),
+            contentType: 'application/json',
+            success: function (response) {
+                $('#myTable').DataTable().clear().destroy();
+
+                initializeDataTable(response);
+                $("#divLoader").hide();
+            }
+        });
+    }
+
+    function SectionItemDateWise(Dsgform, CoreGen, fromdate, todate) {
+        $("#divLoader").show();
+        //if (Dsgform.length > 0 & CoreGen.length > 0 & fromdate > 0 & todate > 0) {
+        $.ajax({
+            url: '/OrderStatus/GetBySectionItemPartyDateWiseSearch',
+            type: 'POST',
+            data: JSON.stringify({
+                section: Dsgform,
+                item: CoreGen,
+                FromDate: fromdate,
+                ToDate: todate
+            }),
+            contentType: 'application/json',
+            success: function (response) {
+                $('#myTable').DataTable().clear().destroy();
+
+                initializeDataTable(response);
+                $("#divLoader").hide();
+            }
+        });
+        //}
+    }
+
+    function initializeDataTable(response) {
+        table = $('#myTable').DataTable({
+
+            data: response,
+            columns: [
+                { data: null, defaultContent: '<input type="checkbox" class="row-checkbox">' },
+                { data: 'WorkOrderNo' },
+                { data: 'OrderDate' },
+                { data: 'NoOfDays' },
+                { data: 'PartyName' },
+                { data: 'DrugDossageForm' },
+                { data: 'GenCode' },
+                { data: 'CorrGenName' },
+                { data: 'ItemStatus' },
+                { data: 'ManufacturingStatus' },
+                { data: 'GroupOrder' }
+            ],
+            select: {
+                style: 'single'
+            },
+            "columnDefs": [
+                {
+                    "targets": 0,
+                    "orderable": false
+                }
+            ],
+            "paging": true,
+            "searching": true,
+            "pageLength": 5,
+            "lengthMenu": [5, 10, 20, 25],
+            "drawCallback": function (settings) {
+                $('input[type="checkbox"]').prop('checked', false);
+            },
+        });
+    }
+
+    function Designer() {
+        var Username = "SampleUser";
+        var PasswordHash = "SamplePasswordHash";
+        var base64Credentials = btoa(Username + ":" + PasswordHash);
+        var workorder = sessionStorage.getItem('workOrderNo');
+        var rowsPerPage = 5;
+        var table = $('#desi').DataTable();
+        var table;
+        $("#loader").show();
+
+        $.ajax({
+            url: '/OrderStatus/DesignerStatus',
+            type: 'POST',
+            data: JSON.stringify({ Work_order: workorder }),
+            contentType: 'application/json',
+            success: function (response) {
+                $('#desi').DataTable().clear().destroy();
+                $("#loader").hide();
+                if (response && response.length > 0) {
+                    table = $('#desi').DataTable({
+                        data: response,
+                        columns: [
+                            { data: null, render: function (data, type, row, meta) { return meta.row + 1; } },
+                            { data: null },
+                            { data: 'NoOfDays' },
+                            { data: 'PItemName' },
+                            { data: 'DateSentTOParty' },
+                            {
+                                data: 'OrderNo',
+                            },
+                            {
+                                data: 'PONo',
+                            },
+                            { data: 'ComponentName' },
+                            { data: 'OrderDate' },
+                            { data: 'OrderStatus' },
+                            {
+                                data: null,
+                                render: function (data, type, row) {
+                                    return '<button class="btn-open-pdf" data-order-no="' + row.OrderNo + '" data-po-no="' + row.PONo + '" data-component="' + row.ComponentName + '" style="display: flex; justify-content: center; align-items: center;"><i class="fa fa-file-pdf-o" style="font-size:24px;color:red;"></i></button>';
+                                }
+                            }
+                        ],
+                        "columnDefs": [
+                            {
+                                "targets": 1,
+                                "render": function (data, type, row) {
+                                    var statusColor;
+                                    if (row.OrderNo != null) {
+                                        statusColor = 'darkgreen';
+                                    } else if (row.DesignAllocateTO != null) {
+                                        statusColor = 'yellow';
+                                    }
+                                    else {
+
+                                    }
+                                    return '<div style="background-color: ' + statusColor + '; width: 20px; height: 20px;"></div>';
+                                }
+                            }
+                        ],
+                        "paging": true,
+                        "searching": true,
+                        "pageLength": rowsPerPage,
+                        "lengthMenu": [5, 10, 20, 25],
+                    });
+                    $('#desi').on('click', '.btn-open-pdf', function () {
+                        var orderNo = $(this).data('order-no');
+                        var poNo = $(this).data('po-no');
+                        var componentName = $(this).data('component');
+
+                        getDesignerPDF(orderNo, poNo, componentName);
+                    });
+                } else {
+                    table = $('#desi').DataTable({
+                        data: [],
+                        columns: [
+                            { data: null, render: function (data, type, row, meta) { return meta.row + 1; } },
+                            { data: null },
+                            { data: 'NoOfDays' },
+                            { data: 'PItemName' },
+                            { data: 'DateSentTOParty' },
+                            { data: 'ComponentName' },
+                            { data: 'PDF' },
+                            { data: 'OrderDate' },
+                            { data: 'OrderStatus' },
+
+                        ]
+                    });
+                }
+            },
+            error: function (error) {
+                console.log("Error: " + error);
+                $("#loader").hide();
+            }
+        });
+    }
+
+    function Testing() {
+        var Username = "SampleUser";
+        var PasswordHash = "SamplePasswordHash";
+        var base64Credentials = btoa(Username + ":" + PasswordHash);
+        var workorder = sessionStorage.getItem('workOrderNo');
+        var rowsPerPage = 5;
+        var table;
+        var table = $('#testing').DataTable();
+
+        $("#loader").show();
+        $.ajax({
+            url: '/OrderStatus/TestingStatus',
+            type: 'POST',
+            data: JSON.stringify({ Work_order: workorder }),
+            contentType: 'application/json',
+            success: function (response) {
+                $('#testing').DataTable().clear().destroy();
+                $("#loader").hide();
+                if (response && response.length > 0) {
+                    table = $('#testing').DataTable({
+                        data: response,
+                        columns: [
+                            { data: null, render: function (data, type, row, meta) { return meta.row + 1; } },
+                            { data: null },
+                            { data: 'SaleOrderDate' },
+                            { data: 'InvoiceNO' },
+                            { data: 'BatchNo' },
+                            { data: 'PartyItemName' },
+                            { data: 'ItemPrBatch' },
+                            { data: 'ttlAmountPerItem' },
+                            { data: 'DateOfTesting' },
+                            { data: 'Category' },
+                            {
+                                data: null,
+                                render: function (data, type, row) {
+                                    return '<button class="btn-open-pdf" data-category="' + row.Category + '" style="display: flex; justify-content: center; align-items: center;"><i class="fa fa-file-pdf-o" style="font-size:24px;color:red;"></i></button>';
+                                }
+                            }
+
+                        ],
+                        "columnDefs": [
+                            {
+                                "targets": 1,
+                                "render": function (data, type, row) {
+                                    var statusColor;
+                                    if (row.COA != null) {
+                                        statusColor = 'darkgreen';
+                                    } else {
+                                        statusColor = 'yellow';
+                                    }
+                                    return '<div style="background-color: ' + statusColor + '; width: 20px; height: 20px;"></div>';
+                                }
+                            }
+                        ],
+                        "paging": true,
+                        "searching": true,
+                        "pageLength": rowsPerPage,
+                        "lengthMenu": [5, 10, 20, 25],
+                    });
+                    $('#testing').on('click', '.btn-open-pdf', function () {
+                        var catgory = $(this).data('category');
+                        getTestingPDF(catgory);
+                    });
+                } else {
+                    table = $('#testing').DataTable({
+                        data: [],
+                        columns: [
+                            { data: null, render: function (data, type, row, meta) { return meta.row + 1; } },
+                            { data: null },
+                            { data: 'NoOfDays' },
+                            { data: 'PItemName' },
+                            { data: 'DateSentTOParty' },
+                            { data: 'ComponentName' },
+                            { data: 'PDF' },
+                            { data: 'OrderDate' },
+                            { data: 'OrderStatus' },
+                            {
+                                data: null, render: function (data, type, row) {
+                                    if (row.NegativeQty >= 0) {
+                                        return row.OrderStaDate;
+                                    } else {
+                                        return row.OrderStatusNO + ' ' + row.OrderStaDate + ' Order_Received';
+                                    }
+                                }
+                            }
+                        ]
+                    });
+                }
+            },
+            error: function (error) {
+                console.log("Error: " + error);
+                $("#loader").hide();
+            }
+        });
+    }
+
+    function RowMaterial() {
+        var Username = "SampleUser";
+        var PasswordHash = "SamplePasswordHash";
+        var base64Credentials = btoa(Username + ":" + PasswordHash);
+        var workorder = sessionStorage.getItem('workOrderNo');
+        var rowsPerPage = 5;
+        var table = $('#RowMaterialStatus').DataTable();
+
+        $("#loader").show();
+        $.ajax({
+            url: '/OrderStatus/RMStatus',
+            type: 'POST',
+            data: JSON.stringify({ Work_order: workorder }),
+            contentType: 'application/json',
+            success: function (response) {
+                $('#RowMaterialStatus').DataTable().clear().destroy();
+                $("#loader").hide();
+                if (response && response.length > 0) {
+                    table = $('#RowMaterialStatus').DataTable({
+                        data: response,
+                        columns: [
+                            { data: null, render: function (data, type, row, meta) { return meta.row + 1; } },
+                            { data: null },
+                            { data: 'NoOfDays' },
+                            { data: 'WorkOrderNo' },
+                            { data: 'ItemName' },
+                            { data: 'IngredentName' },
+                            { data: 'DateOfBlocking' },
+                            { data: 'StockAvailability' },
+                            {
+                                data: null, render: function (data, type, row) {
+                                    if (row.NegativeQty >= 0) {
+                                        return row.OrderStaDate;
+                                    } else {
+                                        return row.OrderStatusNO + ' ' + row.OrderStaDate + ' Order_Received';
+                                    }
+                                }
+                            }
+                        ],
+                        "columnDefs": [
+                            {
+                                "targets": 1,
+                                "render": function (data, type, row) {
+                                    var statusColor;
+                                    if (row.NegativeQty >= 0) {
+                                        statusColor = 'darkgreen';
+                                    } else {
+                                        statusColor = 'darkred';
+                                    }
+                                    return '<div style="background-color: ' + statusColor + '; width: 20px; height: 20px;"></div>';
+                                }
+                            }
+                        ],
+                        "paging": true,
+                        "searching": true,
+                        "pageLength": rowsPerPage,
+                        "lengthMenu": [5, 10, 20, 25],
+                    });
+                } else {
+                    table = $('#RowMaterialStatus').DataTable({
+                        data: [],
+                        columns: [
+                            { data: null, render: function (data, type, row, meta) { return meta.row + 1; } },
+                            { data: null },
+                            { data: 'NoOfDays' },
+                            { data: 'WorkOrderNo' },
+                            { data: 'ItemName' },
+                            { data: 'IngredentName' },
+                            { data: 'DateOfBlocking' },
+                            { data: 'StockAvailability' },
+                            {
+                                data: null, render: function (data, type, row) {
+                                    if (row.NegativeQty >= 0) {
+                                        return row.OrderStaDate;
+                                    } else {
+                                        return row.OrderStatusNO + ' ' + row.OrderStaDate + ' Order_Received';
+                                    }
+                                }
+                            }
+                        ]
+                    });
+                }
+            },
+            error: function (error) {
+                console.log("Error: " + error);
+                $("#loader").hide();
+            }
+        });
+    }
+
+    function PackingMaterial() {
+        var Username = "SampleUser";
+        var PasswordHash = "SamplePasswordHash";
+        var base64Credentials = btoa(Username + ":" + PasswordHash);
+        var workorder = sessionStorage.getItem('workOrderNo');
+        var rowsPerPage = 5;
+        var table = $('#PackingMaterialStatus').DataTable();
+        $("#loader").show();
+        $.ajax({
+            url: '/OrderStatus/PMStatus',
+            type: 'POST',
+            data: JSON.stringify({ PMWorkorder: workorder }),
+            contentType: 'application/json',
+            success: function (response) {
+                $('#PackingMaterialStatus').DataTable().clear().destroy();
+                $("#loader").hide();
+                if (response && response.length > 0) {
+                    table = $('#PackingMaterialStatus').DataTable({
+                        data: response,
+                        columns: [
+                            { data: null, render: function (data, type, row, meta) { return meta.row + 1; } },
+                            { data: null },
+                            { data: 'NoOfDays' },
+                            { data: 'WorkOrderNo' },
+                            { data: 'ItemName' },
+                            { data: 'ComponentName' },
+                            { data: 'AccountHead' },
+                            { data: 'StockAvailability' },
+                            { data: 'PONo' }
+                        ],
+                        "columnDefs": [
+                            {
+                                "targets": 1,
+                                "render": function (data, type, row) {
+                                    var statusColor;
+                                    if (row.NegativeQty >= 0.00) {
+                                        statusColor = 'darkgreen';
+                                    } else {
+                                        statusColor = 'darkred';
+                                    }
+                                    return '<div style="background-color: ' + statusColor + '; width: 20px; height: 20px;"></div>';
+                                }
+                            }
+                        ],
+                        "paging": true,
+                        "searching": true,
+                        "pageLength": rowsPerPage,
+                        "lengthMenu": [5, 10, 20, 25],
+                    });
+                } else {
+                    table = $('#PackingMaterialStatus').DataTable({
+                        data: [],
+                        columns: [
+                            { data: null, render: function (data, type, row, meta) { return meta.row + 1; } },
+                            { data: null },
+                            { data: 'NoOfDays' },
+                            { data: 'WorkOrderNo' },
+                            { data: 'ItemName' },
+                            { data: 'ComponentName' },
+                            { data: 'AccountHead' },
+                            { data: 'StockAvailability' },
+                            { data: 'PONo' }
+                        ]
+                    });
+                }
+            },
+            error: function (error) {
+                console.log("Error: " + error);
+                $("#loader").hide();
+            }
+        });
+    }
+
+    function Production() {
+        var Username = "SampleUser";
+        var PasswordHash = "SamplePasswordHash";
+        var base64Credentials = btoa(Username + ":" + PasswordHash);
+        var workorder = sessionStorage.getItem('workOrderNo');
+        var rowsPerPage = 5;
+        var table = $('#producSt').DataTable();
+
+        $("#loader").show();
+        $.ajax({
+            url: '/OrderStatus/ProdStatus',
+            type: 'POST',
+            data: JSON.stringify({ ProdWorkorder: workorder }),
+            contentType: 'application/json',
+            success: function (response) {
+                $('#producSt').DataTable().clear().destroy();
+                $("#loader").hide();
+                if (response && response.length > 0) {
+                    table = $('#producSt').DataTable({
+                        data: response,
+                        columns: [
+                            { data: null, render: function (data, type, row, meta) { return meta.row + 1; } },
+                            { data: null },
+                            { data: 'NoOfDays' },
+                            { data: 'ItemName' },
+                            { data: 'BatchNo' },
+                            { data: 'BatchSize' },
+                            { data: 'OrderQuantity' },
+                            { data: 'Unit' },
+                            { data: 'ProStartDate' }
+                        ],
+                        "columnDefs": [
+                            {
+                                "targets": 1,
+                                "render": function (data, type, row) {
+                                    var statusColor;
+                                    if (row.StatusGreen !== null) {
+                                        statusColor = 'darkgreen';
+                                    } else if (item.StatusYellow !== null) {
+                                        statusColor = 'yellow';
+                                    } else {
+                                        statusColor = 'darkred';
+                                    }
+                                    return '<div style="background-color: ' + statusColor + '; width: 20px; height: 20px;"></div>';
+                                }
+                            }
+                        ],
+                        "paging": true,
+                        "searching": true,
+                        "pageLength": rowsPerPage,
+                        "lengthMenu": [5, 10, 20, 25],
+                    });
+                }
+                else {
+                    table = $('#producSt').DataTable({
+                        data: [],
+                        columns: [
+                            { data: null, render: function (data, type, row, meta) { return meta.row + 1; } },
+                            { data: null },
+                            { data: 'NoOfDays' },
+                            { data: 'ItemName' },
+                            { data: 'BatchNo' },
+                            { data: 'BatchSize' },
+                            { data: 'OrderQuantity' },
+                            { data: 'Unit' },
+                            { data: 'ProStartDate' }
+                        ]
+                    });
+                }
+            },
+            error: function (error) {
+                console.log("Error: " + error);
+                $("#loader").hide();
+            }
+        });
+    }
+
+    function Packing() {
+        var Username = "SampleUser";
+        var PasswordHash = "SamplePasswordHash";
+        var base64Credentials = btoa(Username + ":" + PasswordHash);
+        var workorder = sessionStorage.getItem('workOrderNo');
+        var rowsPerPage = 5;
+        var table = $('#PackingStatus').DataTable();
+
+        $("#loader").show();
+        $.ajax({
+            url: '/OrderStatus/PackingStatus',
+            type: 'POST',
+            data: JSON.stringify({ PackSWorkorder: workorder }),
+            contentType: 'application/json',
+            success: function (response) {
+                $('#PackingStatus').DataTable().clear().destroy();
+                $("#loader").hide();
+                if (response && response.length > 0) {
+                    table = $('#PackingStatus').DataTable({
+                        data: response,
+                        columns: [
+                            { data: null, render: function (data, type, row, meta) { return meta.row + 1; } },
+                            { data: null },
+                            { data: 'NoOfDays' },
+                            { data: 'WorkOrderNo' },
+                            { data: 'ItemName' },
+                            { data: 'BatchNo' },
+                            { data: 'BatchSize' },
+                            { data: 'OrderQuantity' },
+                            { data: 'Uom' },
+                            { data: 'DateOfPacking' },
+                            { data: 'PackedQuantity' }
+                        ],
+                        "columnDefs": [
+                            {
+                                "targets": 1,
+                                "render": function (data, type, row) {
+                                    var statusColor;
+                                    if (row.StatusGreen !== null) {
+                                        statusColor = 'darkgreen';
+                                    } else if (row.StatusYellow !== null) {
+                                        statusColor = 'yellow';
+                                    } else {
+                                        statusColor = 'darkred';
+                                    }
+                                    return '<div style="background-color: ' + statusColor + '; width: 20px; height: 20px;"></div>';
+                                }
+                            }
+                        ],
+                        "paging": true,
+                        "searching": true,
+                        "pageLength": rowsPerPage,
+                        "lengthMenu": [5, 10, 20, 25],
+                    });
+                }
+                else {
+                    table = $('#PackingStatus').DataTable({
+                        data: [],
+                        columns: [
+                            { data: null, render: function (data, type, row, meta) { return meta.row + 1; } },
+                            { data: null },
+                            { data: 'NoOfDays' },
+                            { data: 'WorkOrderNo' },
+                            { data: 'ItemName' },
+                            { data: 'BatchNo' },
+                            { data: 'BatchSize' },
+                            { data: 'OrderQuantity' },
+                            { data: 'Uom' },
+                            { data: 'DateOfPacking' },
+                            { data: 'PackedQuantity' }
+                        ]
+                    });
+                }
+            },
+            error: function (error) {
+                console.log("Error: " + error);
+                $("#loader").hide();
+            }
+        });
+    }
+
+    function Invoice() {
+        var Username = "SampleUser";
+        var PasswordHash = "SamplePasswordHash";
+        var base64Credentials = btoa(Username + ":" + PasswordHash);
+        var rowsPerPage = 5;
+
+        var workorder = sessionStorage.getItem('workOrderNo');
+        $("#loader").show();
+        $.ajax({
+            url: '/OrderStatus/InvoiceStatus',
+            type: 'POST',
+            data: JSON.stringify({ InvoiceWorkorder: workorder }),
+            contentType: 'application/json',
+            success: function (response) {
+                $('#InvoiceStatusId').DataTable().clear().destroy();
+                $("#loader").hide();
+                if (response && response.length > 0) {
+                    table = $('#InvoiceStatusId').DataTable({
+                        data: response,
+                        columns: [
+                            { data: null, render: function (data, type, row, meta) { return meta.row + 1; } },
+                            { data: 'NoOfDays' },
+                            { data: 'BillingPartyName' },
+                            { data: 'NotifyParty' },
+                            { data: 'DispachParty' },
+                            { data: 'DispachDestination' },
+                            { data: 'FinalDestination' },
+                            { data: 'InvoiceNo' },
+                            { data: 'ItemName' },
+                            { data: 'BatchNo' },
+                            { data: 'ItemPrBatch' },
+                            { data: 'OrderQuantity' },
+                            { data: 'DispatchQuantity' },
+                            { data: 'TotalAmount' },
+                            { data: 'FinalYear' },
+                        ],
+
+                        "paging": true,
+                        "searching": true,
+                        "pageLength": rowsPerPage,
+                        "lengthMenu": [5, 10, 20, 25],
+
+                    });
+                }
+                else {
+                    table = $('#InvoiceStatusId').DataTable({
+                        data: [],
+                        columns: [
+                            { data: null, render: function (data, type, row, meta) { return meta.row + 1; } },
+                            { data: 'NoOfDays' },
+                            { data: 'BillingPartyName' },
+                            { data: 'NotifyParty' },
+                            { data: 'DispachParty' },
+                            { data: 'DispachDestination' },
+                            { data: 'FinalDestination' },
+                            { data: 'InvoiceNo' },
+                            { data: 'ItemName' },
+                            { data: 'BatchNo' },
+                            { data: 'ItemPrBatch' },
+                            { data: 'OrderQuantity' },
+                            { data: 'DispatchQuantity' },
+                            { data: 'TotalAmount' },
+                            { data: 'FinalYear' },
+                        ]
+                    });
+                }
+            },
+            error: function (error) {
+                console.log("Error: " + error);
+                $("#loader").hide();
+            }
+        });
+    }
+
+    function Payment() {
+        var Username = "SampleUser";
+        var PasswordHash = "SamplePasswordHash";
+        var base64Credentials = btoa(Username + ":" + PasswordHash);
+        var workorder = sessionStorage.getItem('workOrderNo');
+        var rowsPerPage = 5;
+        var table = $('#PaymentStatusID').DataTable();
+
+        $("#loader").show();
+        $.ajax({
+            url: '/OrderStatus/PaymentStatus',
+            type: 'POST',
+            data: JSON.stringify({ PaymentWorkorder: workorder }),
+            contentType: 'application/json',
+            success: function (response) {
+                $('#PaymentStatusID').DataTable().clear().destroy();
+                $("#loader").hide();
+                if (response && response.length > 0) {
+                    table = $('#PaymentStatusID').DataTable({
+                        data: response,
+                        columns: [
+                            { data: null, render: function (data, type, row, meta) { return meta.row + 1; } },
+                            { data: 'NoOfDays' },
+                            { data: 'WorkOrderNo' },
+                            { data: 'ItemName' },
+                            { data: 'BatchNo' },
+                            { data: 'OrderQuantity' },
+                            { data: 'UOM' },
+                            { data: 'ProductionStartingDate' }
+                        ],
+
+                        "paging": true,
+                        "searching": true,
+                        "pageLength": rowsPerPage,
+                        "lengthMenu": [5, 10, 20, 25],
+                    });
+                }
+                else {
+                    table = $('#PaymentStatusID').DataTable({
+                        data: [],
+                        columns: [
+                            { data: null, render: function (data, type, row, meta) { return meta.row + 1; } },
+                            { data: 'NoOfDays' },
+                            { data: 'WorkOrderNo' },
+                            { data: 'ItemName' },
+                            { data: 'BatchNo' },
+                            { data: 'OrderQuantity' },
+                            { data: 'UOM' },
+                            { data: 'ProductionStartingDate' }
+                        ]
+                    });
+                }
+            },
+            error: function (error) {
+                console.log("Error: " + error);
+                $("#loader").hide();
+            }
+        });
+    }
+
+    var latestImageUrl;
+
+    function getImagePreviews() {
+        var Username = "SampleUser";
+        var PasswordHash = "SamplePasswordHash";
+        var base64Credentials = btoa(Username + ":" + PasswordHash);
+        var gencode = sessionStorage.getItem('gencode');
+        var partyCode = document.getElementById("imagetextbox").value;
+        $.ajax({
+            type: 'GET',
+            url: 'https://103.80.32.71/testapi/Demo/GetanotherImages?GEN_CODE=' + gencode + '&Party_CODE=' + partyCode,
+            dataType: 'json',
+            contentType: "application/json; charset=utf-8",
+            headers: {
+                "Authorization": "Basic " + base64Credentials
+            },
+            success: function (data) {
+                var canvas = document.getElementById('imagePreview');
+                var ctx = canvas.getContext('2d');
+                var img = new Image();
+                img.onload = function () {
+                    var aspectRatio = img.width / img.height;
+                    var maxWidth = canvas.width;
+                    var maxHeight = canvas.height;
+
+                    var newWidth = maxWidth;
+                    var newHeight = maxHeight;
+                    if (aspectRatio > 1) {
+                        newHeight = maxHeight / aspectRatio;
+                    } else {
+                        newWidth = maxWidth * aspectRatio;
+                    }
+                    var x = (maxWidth - newWidth) / 2;
+                    var y = (maxHeight - newHeight) / 2;
+
+                    ctx.clearRect(0, 0, maxWidth, maxHeight);
+
+                    ctx.drawImage(img, x, y, newWidth, newHeight);
+
+
+                    latestImageUrl = img.src;
+                };
+                img.src = "data:image/*;base64," + data.image;
+                canvas.addEventListener('click', function () {
+                    openImageInNewWindow();
+                });
+            },
+            error: function () {
+                var canvas = document.getElementById('imagePreview');
+                var ctx = canvas.getContext('2d');
+                var maxWidth = canvas.width;
+                var maxHeight = canvas.height;
+
+                ctx.clearRect(0, 0, maxWidth, maxHeight);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Image Not Found!!',
+                    text: 'No Image found',
+                });
+            }
+        });
+    }
+
+    function openImageInNewWindow() {
+        if (latestImageUrl) {
+            var newWindow = window.open();
+            newWindow.document.write('<img src="' + latestImageUrl + '" style="max-width: 100%;">');
+        } else {
+            console.error('No image available to open.');
+        }
+    }
+
+    function getDesignerPDF(orderNo, poNo, componentName) {
+        var Username = "SampleUser";
+        var PasswordHash = "SamplePasswordHash";
+        var base64Credentials = btoa(Username + ":" + PasswordHash);
+        var workorder = sessionStorage.getItem('workOrderNo');
+        $.ajax({
+            type: 'GET',
+            url: 'https://103.80.32.71/testapi/Demo/GetPdf?workorder=' + workorder + '&orderno=' + orderNo + '&pono=' + poNo + '&compoNmae=' + componentName,
+            dataType: 'json',
+            contentType: "application/json; charset=utf-8",
+            headers: {
+                "Authorization": "Basic " + base64Credentials
+            },
+            success: function (data) {
+                var dataUrl = 'data:application/pdf;base64,' + data.image;
+                var link = document.createElement('a');
+                link.href = dataUrl;
+                link.download = 'Designer_PDF.pdf';
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            },
+
+            error: function (error) {
+                var canvas = document.getElementById('imagePreview');
+                var ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'PDF Not Found!!',
+                    text: 'No PDF found',
+                });
+
+
+            }
+        });
+    }
+
+    function getTestingPDF(catgory) {
+        var Username = "SampleUser";
+        var PasswordHash = "SamplePasswordHash";
+        var base64Credentials = btoa(Username + ":" + PasswordHash);
+        var workorder = sessionStorage.getItem('workOrderNo');
+        $.ajax({
+            type: 'GET',
+            url: 'https://103.80.32.71/testapi/Demo/GetPdfOFTesting?workorder=' + workorder + '&category=' + catgory,
+            dataType: 'json',
+            contentType: "application/json; charset=utf-8",
+            headers: {
+                "Authorization": "Basic " + base64Credentials
+            },
+            success: function (data) {
+                var dataUrl = 'data:application/pdf;base64,' + data.image;
+                var link = document.createElement('a');
+                link.href = dataUrl;
+                link.download = 'Testing_PDF.pdf';
+                link.style.display = 'none';
+                document.body.appendChild(link);
+
+                link.click();
+
+                document.body.removeChild(link);
+            },
+
+            error: function (error) {
+                var canvas = document.getElementById('imagePreview');
+                var ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'PDF Not Found!!',
+                    text: 'No PDF found',
+                });
+
+
+            }
+        });
+    }
+
+</script>
+<script>
+    $(document).ready(function () {
+        $('#myTable').DataTable();
+        $('#desi').DataTable();
+        $('#testing').DataTable();
+        $('#RowMaterialStatus').DataTable();
+        $('#PackingMaterialStatus').DataTable();
+        $('#producSt').DataTable();
+        $('#PackingStatus').DataTable();
+        $('#InvoiceStatusId').DataTable();
+        $('#PaymentStatusID').DataTable();
+    });
+</script>
+
+<div class="content-wrapper mt-10">
+
+    <div class="row page-titles">
+        <div class="col-md-12 align-self-center">
+            <center>
+                <h3 class="theme-cl">ORDER STATUS</h3>
+            </center>
+        </div>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <div class="card col-md-4 col-sm-12 col-xs-12" style="background-color: #a9b8d794;padding:4px;">
+                <div class="row">
+                    <div class="col-md-8 col-sm-12">
+                        <div class="row margin">
+                            <div class="col-md-6 col-sm-12 party" title="Find Work Order Wise">
+                                <label><b>Find Group Order</b></label>
+                            </div>
+                            <div class="col-md-6 col-sm-12">
+                                <input type="text" class="form-control form-control-sm AllSearch" id="findGroupOrder" title="Find Group Order" placeholder="Group Order Search" autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="row margin mt-1">
+                            <div class="col-md-6 col-sm-12 party" title="Find Work Order Wise">
+                                <label><b>Find Work Order</b></label>
+                            </div>
+                            <div class="col-md-6 col-sm-12">
+                                <input type="text" class="form-control form-control-sm AllSearch" id="findWorkOrder" title="Find Work Order" placeholder="Work Order Search" autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="row margin mt-1">
+                            <div class="col-md-6 col-sm-12 party" title="Find Batch no.">
+                                <label><b>Find Batch</b></label>
+                            </div>
+                            <div class="col-md-6 col-sm-12">
+                                <input type="text" class="form-control form-control-sm AllSearch" id="findBatchNo" title="Find Batch no" placeholder="Batch No Search" autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="row margin mt-1">
+                            <div class="col-md-6 col-sm-12 party" title="Combi Code">
+                                <label><b>Find Combi Code</b></label>
+                            </div>
+                            <div class="col-md-6 col-sm-12">
+                                <input id="imagetextbox" value="@userID" hidden />
+                                <input type="text" class="form-control form-control-sm AllSearch" id="combiCode" title="Find combi code" placeholder="Combi Code Search" autocomplete="off">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4 col-sm-12 mt-2 d-flex align-items-center justify-content-center">
+                        <div class="card" style="background-color:white;">
+                            <label class="Picture" for="dummy-img">Product Image</label>
+                            <div>
+                                <canvas class="picture-box" id="imagePreview" height="120" width="90" title="Click to Open In New Window"></canvas>                       
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card col-md-8 col-sm-12 col-xs-12" style="background-color: #a9b8d794;z-index:60;overflow-x:hidden;">
+                <div class="row">
+                    <div class="col-md-2 mt-2 ">
+                        <label class="party">Party Name</label>
+                    </div>
+                    <div class="col-md-10 col-sm-12  height-40">
+                        <span id="ddl_PartyName" class="form-control partywisesearch"> </span>
+                    </div>
+                </div>
+
+                <div class="row mt-2">
+                    <div class="col-md-5 col-sm-12 col-12">
+                        <div class="row">
+                            <div class="col-md-3 col-sm-12 mt-1">
+                                <label class="section">Section</label>
+                            </div>
+                            <div class="col-md-9 col-sm-12">
+                                <select id="ddl_SectionName" class="form-control partywisesea"> </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-7 col-sm-12 col-12">
+                        <div class="row">
+                            <div class="col-md-3 col-sm-12 mt-1">
+                                <label class="party">Item Name</label>
+                            </div>
+                            <div class="col-md-7 col-sm-12 mb-2">
+                                <div class="custom-drop">
+                                    <div class="dropdown-containerI">
+                                        <select id="ddl_ItemName" class="form-control partywisesearch item"> </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 col-sm-2 mt-4">
+                        <script>"use strict";</script>
+                        <div class="row">
+                            <div class="col-md-5 col-12">
+                                <button type="button" class="btn btn-sm btnNot btn-primary" style="font-size: 12px; --color: #ffffff; --background-color: #ff4081; --border-color: #ec407a;">Not To Manufactured</button>
+                            </div>
+                            <div class="col-md-2 ">
+                                <button type="button" class="btn btn-sm btnHold btn-primary" style="font-size: 12px;">Hold</button>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-sm btn-primary" style="font-size: 12px;">Cancel</button>
+                            </div>
+                            <div class="col-md-3 ">
+                                <button type="button" class="btn btn-sm btnClearAll btn-primary" style="font-size: 12px; " onclick="clearAllInputs()" title="Clear Before Every Search">ClearAll</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-sm-12">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="col-md-12 col-sm-12">
+                                    <label class="party" for="dob">From Date</label>
+                                </div>
+
+                                <div class="col-md-12 col-sm-12">
+                                    <input type="text" class="datsearch" id="datewisesearch1" placeholder="dd/mm/yyyy" autocomplete="off" style="cursor:pointer;" />
+                                </div>
+                            </div>
+                            <div class="col-md-4 col-sm-12">
+                                <div class="col-md-12 col-sm-12">
+                                    <label class="party" for="dob">To Date</label>
+                                </div>
+                                <div class="col-md-12 col-sm-12" title="Select Date">
+                                    <input type="text" class="datsearch" id="datewisesearch2" placeholder="dd/mm/yyyy" autocomplete="off" style="cursor:pointer;" />
+                                </div>
+                            </div>
+                            <div class="col-md-4 col-sm-12 mt-4">
+                                <div class="col-md-12 col-sm-12">
+                                    <button id="submitButton" class="btn-flip btn btn-3d btn-primary " title="Click for Submit">
+                                        <span class="text">Submit</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+
+    <div class="card col-md-12 col-sm-12 col-12" style="background-color: #a9b8d794;">
+        <div id="divLoader" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(255, 255, 255, 0.7); text-align: center; z-index: 2;">
+            <img src="~/Content/img/Hourglass.gif" alt="Loader" style="position: relative; top: 50%; transform: translateY(-50%);" />
+        </div>
+        <div class="wrapper">
+            <div class="tableContainer">
+                <table id="myTable" class="table table-bordered table-hover" style="background-color:white;">
+                    <thead class="p-3 mb-2 text-black-50">
+                        <tr>
+                            <th>Select</th>
+                            <th>Work Order No.</th>
+                            <th>Order Date</th>
+                            <th>No. Of Days</th>
+                            <th>Party Name</th>
+                            <th>Drug Dossage Form</th>
+                            <th>Gen Code</th>
+                            <th>Corr. Gen. Name</th>
+                            <th>Item Status</th>
+                            <th>Manufacturing Status</th>
+                            <th>Group Order</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="box-content-colapse">
+            <details class="details-comp">
+                <summary id="design" class="summary-colapse" title="Click to Open" style="cursor:pointer">
+                    Designer Status
+                </summary>
+                <p> @Html.Partial("_Designer") </p>
+            </details>
+        </div>
+        <div class="box-content-colapse">
+            <details class="details-comp">
+                <summary id="design" class="summary-colapse" title="Click to Open" style="cursor:pointer">
+                    RM Status
+                </summary>
+                <p> @Html.Partial("_RM") </p>
+            </details>
+        </div>
+        <div class="box-content-colapse">
+            <details class="details-comp">
+                <summary id="design" class="summary-colapse" title="Click to Open" style="cursor:pointer">
+                    Packing Material Status
+                </summary>
+                <p> @Html.Partial("_PackingMStatus") </p>
+            </details>
+        </div>
+        <div class="box-content-colapse">
+            <details class="details-comp">
+                <summary id="design" class="summary-colapse" title="Click to Open" style="cursor:pointer">
+                    Production Status
+                </summary>
+                <p> @Html.Partial("_Production") </p>
+            </details>
+        </div>
+        <div class="box-content-colapse">
+            <details class="details-comp">
+                <summary id="design" class="summary-colapse" title="Click to Open" style="cursor:pointer">
+                    Packing Status
+                </summary>
+                <p> @Html.Partial("_PackingStatus") </p>
+            </details>
+        </div>
+        <div class="box-content-colapse">
+            <details class="details-comp">
+                <summary id="design" class="summary-colapse" title="Click to Open" style="cursor:pointer">
+                    Testing Status
+                </summary>
+                <p> @Html.Partial("_Testing") </p>
+            </details>
+        </div>
+        <div class="box-content-colapse">
+            <details class="details-comp">
+                <summary id="design" class="summary-colapse" title="Click to Open" style="cursor:pointer">
+                    Invoice Status
+                </summary>
+                <p> @Html.Partial("_Invoice")</p>
+            </details>
+        </div>
+        <div class="box-content-colapse">
+            <details class="details-comp">
+                <summary id="design" class="summary-colapse" title="Click to Open" style="cursor:pointer">
+                    Payment Status
+                </summary>
+                <p> @Html.Partial("_Payment") </p>
+            </details>
+        </div>
+
+    </div>
+
+</div>

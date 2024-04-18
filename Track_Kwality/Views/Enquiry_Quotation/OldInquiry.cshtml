@@ -1,0 +1,475 @@
+﻿
+@{
+    ViewBag.Title = "OldInquiry";
+    var userID = ViewBag.UserID;
+}
+<style>
+    .button-container {
+        display: flex;
+        justify-content: space-between;
+        max-width: 1024px; /* Adjust as needed */
+        margin: 10px 20px; /* Center the buttons */
+        /*background-color:yellow;*/
+    }
+
+    .table-container {
+        width: 100%;
+        height: 500px;
+        overflow: auto; /* Enable scroll bars */
+        border: 1px solid #ccc; /* Optional: Add border for visual clarity */
+    }
+
+    thead {
+        position: sticky;
+        top: 0;
+        /* Optional: Add background color for visual clarity */
+    }
+
+    .update-button {
+        background-color: #9EA1D4; /* Add your desired background color here */
+    }
+
+    .custom-row {
+        height: 50px; /* Set your desired row height in pixels */
+    }
+
+    #resultTable td:nth-child(1), #resultTable th:nth-child(1) {
+        width: 50px; /* Set your desired width in pixels for the first column */
+    }
+
+    /* Set fixed pixel values for other columns as needed */
+    #resultTable td:nth-child(2), #resultTable th:nth-child(2) {
+        width: 100px; /* Set your desired width in pixels for the second column */
+    }
+
+    #resultTable td:nth-child(3), #resultTable th:nth-child(3) {
+        width: 100px; /* Set your desired width in pixels for the second column */
+    }
+
+    #resultTable td:nth-child(4), #resultTable th:nth-child(4) {
+        width: 100px; /* Set your desired width in pixels for the second column */
+    }
+
+    #resultTable td:nth-child(5), #resultTable th:nth-child(5) {
+        width: 100px; /* Set your desired width in pixels for the second column */
+    }
+
+
+    .form-group {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .or-line {
+        display: flex;
+        align-items: center;
+        text-align: center;
+        width: 80%;
+    }
+
+        .or-line hr {
+            flex-grow: 1;
+            border: none;
+            height: 2px;
+            background-color: #ccc;
+        }
+
+    .or-text {
+        margin: 0 10px;
+        color: #555;
+    }
+
+    .ribbon {
+        display: flex;
+        justify-content: right;
+        align-items: center;
+        position: relative;
+        background-color: #94a2b1;
+        color: white;
+        padding: 10px;
+    }
+
+</style>
+
+<div class="content-wrapper">
+    <h2 style="text-align:center">
+        <span>INQUIRY MANAGEMENT</span>
+    </h2>
+
+    <div class="container-fluid ribbon">
+        <a id="searchButton" class="btn btn-primary" href="/Enquiry_Quotation/OldInquiry" style="margin-left: 5px;">Search Old Inquiry</a>
+        <a id="AddNew" class="btn btn-primary" href="/Enquiry_Quotation/Inquiry" style="margin-left: 5px;">Add New Inquiry</a>
+        <a id="InquiryListBtn" class="btn btn-primary" href="/Enquiry_Quotation/InquiryList?userId=@userID" style="margin-left: 5px;">Inquiry List</a>
+        <button id="Quotation" class="btn btn-primary" style="margin-left:5px;" title="History">Quotation</button>
+
+    </div>
+    <section class="container-fluid" id="inquiryserch">
+
+
+        <div class="form-group row" style="margin-top:10px;">
+            <div class="col-md-3">
+                <label for="Searchinquiry" style="">SELECT TYPE</label>
+                <select id="SearchAllpendinginquiry" style="">
+                    <option value="">--Select Type-- </option>
+                    <option value="All">All</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Approved">Approved</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label for="Searchinquiry" style="">SELECT INQUIRY</label>
+                <select id="Searchinquiry" style="">
+                    <option value="">
+                        --Select Inquiry--
+                    </option>
+                </select>
+            </div>
+            <!--<select class="dropdown-menu" aria-labelledby="dropdownMenuButton" id="Searchinquiry">-->
+            <!-- Options will be dynamically added here -->
+            <!--</select-->
+            <div class="col-md-5">
+                <label for="Searchinquirydosewise" style="">SELECT DOSE</label>
+                <select id="Searchinquirydosewise" style="">
+                    <option value="">
+                        --Select Dose Type--
+                    </option>
+                </select>
+
+            </div>
+
+        </div>
+        <div class="form-group col-md-12 row" style="margin-top:10px;">
+            <label for="startDate" style="margin-right:5px;">FROM DATE</label>
+            <input type="date" id="startDate">
+
+            <label for="endDate" style="margin-right: 5px;margin-left:10px;">TO DATE</label>
+            <input type="date" id="endDate">
+            <br>
+            <button class="btn btn-primary" style="margin: 5px;" onclick="getDateRange()">Get Inquiry</button>
+            <button class="btn btn-primary" style="margin: 5px;" onclick="clearAll()">Clear</button>
+
+
+        </div>
+
+
+        <div id="divLoader" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(255, 255, 255, 0.7); text-align: center; z-index: 2;">
+            <img src="~/Content/img/Hourglass.gif" alt="Loader" style="position: relative; top: 50%; transform: translateY(-50%);" />
+        </div>
+
+        <div id="InquiryDetails" class="table-container" style="overflow-x: auto; position: relative; z-index: 1;">
+            <div class="result-container">
+                <table id="resultTable" class="table table-bordered table-hover" border="1" style="width: 100%;">
+                    <thead id="theadserch">
+
+
+                        <tr>
+                            <th> Sr No.                         </th>
+                            <th> Quotation Status               </th>
+                            <th> Inquiry Code                   </th>
+                            <th> Party Item Name                </th>
+                            <th> Drug Dossage Form              </th>
+                            <th> Size                           </th>
+                            <th> Unit                           </th>
+                            <th> Packing Type                   </th>
+                            <th> Qty Per Pack                   </th>
+                            <th> No Of Pack                     </th>
+                            <th> Total Unit                     </th>
+                            <th> Proposed Price                 </th>
+
+
+
+
+
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <br />
+
+        <br />
+        <br />
+        <br />
+        <br />
+        <br />
+
+
+
+    </section>
+</div>
+<script>
+    window.onload = function () {
+        $.ajax({
+            url: '/Enquiry_Quotation/GetEnqCodeList',
+            type: 'POST',
+            dataType: 'json',
+            contentType: "application/json; charset=utf-8",
+            success: function (data) {
+                var ddl_PartyName = $('#Searchinquiry');
+                //console.log(ddl_PartyName)
+                //ddl_PartyName.empty();
+
+                ddl_PartyName.empty().append($('<option>', { value: '', text: '--Select Inquiry--' }));
+                $.each(data, function (index, item) {
+                    ddl_PartyName.append($('<option>', {
+                        value: item.enq_code,
+                        text: item.enq_code
+
+                    }));
+                });
+            },
+            error: function (xhr, textStatus, errorThrown) {
+
+                if (errorThrown === 'net::ERR_CERT_AUTHORITY_INVALID') {
+                    console.log('SSL certificate authority invalid.');
+
+                }
+                else {
+                    console.log('Other error: ' + errorThrown);
+                }
+            }
+
+
+        });
+    }
+    $('#SearchAllpendinginquiry').change(function () {
+        const inquiryType = $('#SearchAllpendinginquiry').val();
+        if (inquiryType === "") {
+            return;
+        }
+        $("#divLoader").show();
+        if (inquiryType === "All") {
+            getDataAll();
+        }
+        if (inquiryType === "Pending") {
+            getDataPending();
+        }
+        if (inquiryType === "Approved") {
+            getDataApproved();
+        }
+    });
+    $('#Searchinquiry').change(function () {
+        const inquiryCode = $('#Searchinquiry').val();
+        if (inquiryCode === "") {
+            return;
+        }
+        else {
+            $("#divLoader").show();
+            getDataEnqCodeWise(inquiryCode);
+        }
+
+    });
+    $('#Searchinquirydosewise').change(function () {
+        const dosageForm = $('#Searchinquirydosewise').val();
+        if (dosageForm === "") {
+            return;
+        }
+        $("#divLoader").show();
+        getDataDoseWise(dosageForm);
+    });
+    function getDateRange() {
+        const startDate = $('#startDate').val();
+        const endDate = $('#endDate').val();
+        if (!startDate) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Empty Start Date',
+                text: 'Please select a start date',
+            });
+        } else if (!endDate) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Empty End Date',
+                text: 'Please select an end date',
+            });
+        } else if (startDate > endDate) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Incorrect Date',
+                text: 'From Date is Greater Than To Date',
+            });
+        } else {
+            $("#divLoader").show();
+            getDataDateWise(startDate, endDate);
+        }
+
+
+
+    }
+    function getDataAll() {
+
+        $.ajax({
+            type: 'POST',
+            url: '/Enquiry_Quotation/OldInquiryList',
+            dataType: 'json',
+            contentType: "application/json; charset=utf-8",
+            success: function (response) {
+                // Process the response and update the table
+                updateTable(response);
+
+                $("#divLoader").hide();
+            },
+            error: function (error) {
+                console.error('Error fetching data:', error);
+            }
+        });
+
+
+    }
+
+    function getDataPending() {
+        $.ajax({
+            type: 'POST',
+            url: '/Enquiry_Quotation/OldInquiryPendingList',
+            dataType: 'json',
+            contentType: "application/json; charset=utf-8",
+            success: function (response) {
+                // Process the response and update the table
+                updateTable(response);
+                $("#divLoader").hide();
+            },
+            error: function (error) {
+                console.error('Error fetching data:', error);
+            }
+        });
+
+
+    }
+    function getDataApproved() {
+        $.ajax({
+            type: 'POST',
+            url: '/Enquiry_Quotation/OldInquiryApprovedList',
+            dataType: 'json',
+            contentType: "application/json; charset=utf-8",
+            success: function (response) {
+                // Process the response and update the table
+                updateTable(response);
+                $("#divLoader").hide();
+            },
+            error: function (error) {
+                console.error('Error fetching data:', error);
+            }
+        });
+
+    }
+
+    function getDataEnqCodeWise(inquiryCode) {
+        $.ajax({
+            type: 'POST',
+            url: '/Enquiry_Quotation/OldInquiryCodeWiseList?inquiryCode=' + inquiryCode,
+            dataType: 'json',
+            data: JSON.stringify({ inquiryCode: inquiryCode }),
+            contentType: "application/json; charset=utf-8",
+            success: function (response) {
+                // Process the response and update the table
+                updateTable(response);
+                $("#divLoader").hide();
+            },
+            error: function (error) {
+                console.error('Error fetching data:', error);
+            }
+        });
+
+
+    }
+    function getDataDoseWise(dosageForm) {
+
+        $.ajax({
+            type: 'POST',
+            url: '/Enquiry_Quotation/OldInquiryDosformWiseList?dosageForm=' + dosageForm,
+            dataType: 'json',
+            data: JSON.stringify({ dosageForm: dosageForm }),
+            contentType: "application/json; charset=utf-8",
+            success: function (response) {
+                // Process the response and update the table
+                updateTable(response);
+                $("#divLoader").hide();
+            },
+            error: function (error) {
+                console.error('Error fetching data:', error);
+            }
+        });
+
+
+    }
+    function getDataDateWise(startDate, endDate) {
+
+        $.ajax({
+            type: 'POST',
+            url: '/Enquiry_Quotation/OldInquiryDateWiseList?startDate=' + startDate + '&endDate=' + endDate,
+            dataType: 'json',
+            data: JSON.stringify({ startDate: startDate, endDate: endDate }),
+            contentType: "application/json; charset=utf-8",
+            success: function (response) {
+                // Process the response and update the table
+                updateTable(response);
+                $("#divLoader").hide();
+            },
+            error: function (error) {
+                console.error('Error fetching data:', error);
+            }
+        });
+
+    }
+
+
+        function updateTable(response) {
+            $('#resultTable').DataTable().clear().destroy();
+            // $('#resultTable tbody').empty();
+            document.getElementById('InquiryDetails').style.display = "block";
+            let serialNumber = 0;
+            if (response && response.length > 0) {
+                table = $('#resultTable').DataTable({
+                    data: response,
+                    columns: [
+                        {
+                            data: null, render: function () {
+                                serialNumber++;
+                                return serialNumber;
+                            }
+                        },
+                        { data: 'QuotationStatus' },
+                        { data: 'InquiryCode' },
+                        { data: 'PartyItemName' },
+                        { data: 'DrugDossageForm' },
+                        { data: 'Size' },
+                        { data: 'Unit' },
+                        { data: 'PackingType' },
+                        { data: 'QtyPerPack' },
+                        { data: 'NoOfPack' },
+                        { data: 'TotalUnit' },
+                        { data: 'ProposedPrice' }
+                    ],
+                    select: {
+                        style: 'single'
+                    },
+                    "columnDefs": [
+                        {
+                            "targets": 0,
+                            "orderable": false
+                        }
+                    ],
+                    "paging": true,
+                    "searching": true,
+                    "pageLength": 5,
+                    "lengthMenu": [5, 10, 20, 25]
+                });
+            }
+        }
+
+    function clearAll() {
+
+        $('#SearchAllpendinginquiry').val('');
+        $('#Searchinquiry').val('');
+        $('#Searchinquirydosewise').val('');
+
+        $('#startDate').val('');
+        $('#endDate').val('');
+        $('#resultTable').DataTable().clear().destroy();
+        /*$('#InquiryDetails').style.display = "none";*/
+        document.getElementById('InquiryDetails').style.display = "none";
+    }
+</script>
